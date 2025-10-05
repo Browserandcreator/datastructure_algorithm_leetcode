@@ -1,0 +1,20 @@
+{
+  "id": 239,
+  "title": "Sliding Window Maximum",
+  "slug": "sliding-window-maximum",
+  "difficulty": "Hard",
+  "tags": [
+    "Queue",
+    "Array",
+    "Sliding Window",
+    "Monotonic Queue",
+    "Heap (Priority Queue)"
+  ],
+  "link": "https://leetcode.cn/problems/sliding-window-maximum",
+  "desc_text": "给你一个整数数组 nums，有一个大小为&nbsp;k&nbsp;的滑动窗口从数组的最左侧移动到数组的最右侧。你只可以看到在滑动窗口内的 k&nbsp;个数字。滑动窗口每次只向右移动一位。\n\n返回 滑动窗口中的最大值 。\n\n&nbsp;\n\n示例 1：\n\n\n输入：nums = [1,3,-1,-3,5,3,6,7], k = 3\n输出：[3,3,5,5,6,7]\n解释：\n滑动窗口的位置                最大值\n---------------               -----\n[1  3  -1] -3  5  3  6  7       3\n 1 [3  -1  -3] 5  3  6  7       3\n 1  3 [-1  -3  5] 3  6  7       5\n 1  3  -1 [-3  5  3] 6  7       5\n 1  3  -1  -3 [5  3  6] 7       6\n 1  3  -1  -3  5 [3  6  7]      7\n\n\n示例 2：\n\n\n输入：nums = [1], k = 1\n输出：[1]\n\n\n&nbsp;\n\n提示：\n\n\n\t1 &lt;= nums.length &lt;= 105\n\t-104&nbsp;&lt;= nums[i] &lt;= 104\n\t1 &lt;= k &lt;= nums.length",
+  "skeletons": {
+    "cpp": "class Solution {\npublic:\n    vector<int> maxSlidingWindow(vector<int>& nums, int k) {\n        \n    }\n};",
+    "python": "class Solution(object):\n    def maxSlidingWindow(self, nums, k):\n        \"\"\"\n        :type nums: List[int]\n        :type k: int\n        :rtype: List[int]\n        \"\"\"\n        "
+  },
+  "site": "cn"
+}
