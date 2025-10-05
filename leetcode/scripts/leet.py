@@ -7,6 +7,10 @@ Leet Manager (robust CN/COM, CSRF-aware)
 - Use requests.Session per-site; warm up to get csrftoken
 - Send x-csrftoken + cookies for GraphQL
 - Fallback to /api/problems/all/ when GraphQL slug lookup fails
+- README now includes:
+  * Overview table (same as before)
+  * Index by Difficulty (Easy/Medium/Hard)
+  * Index by Topic (Data Structure / topicTags)
 
 Commands: new / quick / remove / index / readme
 """
@@ -58,19 +62,19 @@ def zero4(n: int) -> str:
     return f"{int(n):04d}"
 
 def sanitize_dir_name(qid: int, slug: str) -> str:
-    slug = re.sub(r"[^a-z0-9\-]", "-", (slug or "").lower())
+    slug = re.sub(r"[^a-z0-9\\-]", "-", (slug or "").lower())
     slug = re.sub(r"-{2,}", "-", slug).strip("-")
     return f"{zero4(qid)}-{slug}" if slug else zero4(qid)
 
 def html_to_text(s: str) -> str:
     if not s:
         return ""
-    s = re.sub(r"<\s*br\s*/?>", "\n", s, flags=re.I)
-    s = re.sub(r"</\s*p\s*>", "\n\n", s, flags=re.I)
-    s = re.sub(r"<\s*li\s*>", "- ", s, flags=re.I)
-    s = re.sub(r"<\s*code\s*>(.*?)</\s*code\s*>", r"`\1`", s, flags=re.I | re.S)
+    s = re.sub(r"<\\s*br\\s*/?>", "\\n", s, flags=re.I)
+    s = re.sub(r"</\\s*p\\s*>", "\\n\\n", s, flags=re.I)
+    s = re.sub(r"<\\s*li\\s*>", "- ", s, flags=re.I)
+    s = re.sub(r"<\\s*code\\s*>(.*?)</\\s*code\\s*>", r"`\\1`", s, flags=re.I | re.S)
     s = re.sub(r"<[^>]+>", "", s)
-    s = re.sub(r"\r?\n\s*\r?\n\s*\r?\n+", "\n\n", s)
+    s = re.sub(r"\\r?\\n\\s*\\r?\\n\\s*\\r?\\n+", "\\n\\n", s)
     return s.strip()
 
 # ---------------------- Session / CSRF ----------------------
@@ -86,25 +90,18 @@ class SiteClient:
         self.csrf = None
 
     def _ua_headers(self) -> dict:
-        # Add Accept headers; Referer/Origin will be set by caller when known
         return {
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json, text/plain, */*",
             "Content-Type": "application/json",
-            # x-csrftoken added dynamically when we have it
         }
 
     def warm_up(self):
-        """
-        Hit a couple of pages to obtain csrftoken cookie.
-        """
         try:
             self.sess.get(self.base + "/", timeout=15, headers=self._ua_headers())
-            # problemset page usually sets cookies too
             self.sess.get(self.base + "/problemset/all/", timeout=15, headers=self._ua_headers())
         except Exception:
             pass
-        # pick csrftoken if present
         self.csrf = self.sess.cookies.get("csrftoken") or self.sess.cookies.get("csrftoken", None)
 
     def headers(self, referer_path: str = "/") -> dict:
@@ -116,9 +113,6 @@ class SiteClient:
         return h
 
     def post_graphql(self, payload: dict, referer_path: str = "/") -> dict | None:
-        """
-        POST to /graphql/ with CSRf + cookies.
-        """
         url = _graphql_url(self.site)
         try:
             r = self.sess.post(url, json=payload, headers=self.headers(referer_path), timeout=25)
@@ -138,9 +132,6 @@ class SiteClient:
 # ---------------------- Fetch (slug/detail) ----------------------
 
 def lookup_slug_by_id_graphql(qid: int, client: SiteClient) -> str | None:
-    """
-    Preferred: GraphQL lookup by frontendQuestionId -> titleSlug
-    """
     payload = {
         "operationName": "problemsetQuestionList",
         "variables": {
@@ -164,9 +155,6 @@ def lookup_slug_by_id_graphql(qid: int, client: SiteClient) -> str | None:
     return (arr[0] or {}).get("titleSlug")
 
 def lookup_slug_by_id_rest(qid: int, client: SiteClient) -> str | None:
-    """
-    Fallback: /api/problems/all/  (map id -> slug)
-    """
     data = client.get_json("/api/problems/all/")
     if not data:
         return None
@@ -179,9 +167,6 @@ def lookup_slug_by_id_rest(qid: int, client: SiteClient) -> str | None:
     return None
 
 def fetch_question_detail_by_slug(slug: str, client: SiteClient) -> dict:
-    """
-    GraphQL questionData (needs csrftoken + cookies)
-    """
     payload = {
         "operationName": "questionData",
         "variables": {"titleSlug": slug},
@@ -208,9 +193,6 @@ def fetch_question_detail_by_slug(slug: str, client: SiteClient) -> dict:
     return (data.get("data", {}) or {}).get("question", {}) or {}
 
 def resolve_meta(qid: int, site_opt: str | None = None) -> dict:
-    """
-    Try CN then COM (unless --site forces one). Use GraphQL, fallback REST.
-    """
     if requests is None:
         return {}
 
@@ -219,17 +201,12 @@ def resolve_meta(qid: int, site_opt: str | None = None) -> dict:
         cli = SiteClient(s)
         cli.warm_up()
 
-        # 1) slug via GraphQL
         slug = lookup_slug_by_id_graphql(qid, cli)
-
-        # 2) fallback REST if needed
         if not slug:
             slug = lookup_slug_by_id_rest(qid, cli)
-
         if not slug:
             continue
 
-        # fetch detail
         q = fetch_question_detail_by_slug(slug, cli)
         if not q:
             continue
@@ -245,14 +222,12 @@ def resolve_meta(qid: int, site_opt: str | None = None) -> dict:
 
         link = f"{_site_base(s)}/problems/{slug}"
 
-        # prefer translatedContent on cn
         if s == "cn":
             desc_html = q.get("translatedContent") or q.get("content") or ""
         else:
             desc_html = q.get("content") or q.get("translatedContent") or ""
         desc_text = html_to_text(desc_html)
 
-        # code skeletons
         skel = {"cpp": None, "python": None}
         for sn in (q.get("codeSnippets") or []):
             lang_slug = (sn.get("langSlug") or "").lower()
@@ -384,32 +359,100 @@ def cmd_index(args=None):
         w.writerows(rows)
     print(f"[ok] INDEX.csv updated ({len(rows)} items)")
 
-def cmd_readme(args=None):
-    if not INDEX_CSV.exists():
-        cmd_index(None)
-    try:
-        with open(INDEX_CSV, "r", encoding="utf-8") as f:
-            rows = list(csv.DictReader(f))
-    except Exception:
-        rows = []
+# ---------- README builders (Overview + Difficulty + Topic) ----------
 
+def _load_all_meta_from_disk():
+    metas = []
+    for d in sorted(PROBLEMS.glob("*")):
+        if not d.is_dir():
+            continue
+        meta_path = d / "meta.json"
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            meta["_path"] = str(d.relative_to(ROOT))
+            metas.append(meta)
+        except Exception:
+            pass
+    return metas
+
+def _markdown_table_header():
+    return ["| ID | Title | Difficulty | Tags | Path |",
+            "|---:|-------|:----------:|------|------|"]
+
+def _row_line(meta):
+    title = meta.get("title", "") or meta.get("slug", "")
+    slug = meta.get("slug", "")
+    site = meta.get("site", "com")
+    site_link = f"{_site_base(site)}/problems/{slug}" if slug else ""
+    title_md = f"[{title}]({site_link})" if site_link else title
+    tags = ", ".join(meta.get("tags") or [])
+    return f"| {meta.get('id','')} | {title_md} | {meta.get('difficulty','')} | {tags} | `{meta.get('_path','')}` |"
+
+def _build_overview_section(metas):
     lines = []
     lines.append("# LeetCode Workspace")
     lines.append("")
     lines.append(f"Last update: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append("")
-    lines.append("| ID | Title | Difficulty | Tags | Path |")
-    lines.append("|---:|-------|:----------:|------|------|")
-    for r in rows:
-        tags = r.get("tags", "").replace("|", ", ")
-        title = r.get("title", "") or r.get("slug", "")
-        link = r.get("slug", "")
-        site_link = f"https://leetcode.com/problems/{link}" if link else ""
-        title_md = f"[{title}]({site_link})" if site_link else title
-        lines.append(f"| {r.get('id','')} | {title_md} | {r.get('difficulty','')} | {tags} | `{r.get('path','')}` |")
+    lines.append("## Overview")
+    lines.extend(_markdown_table_header())
+    for m in sorted(metas, key=lambda x: int(x.get("id", 0))):
+        lines.append(_row_line(m))
+    lines.append("")
+    return lines
+
+def _build_index_by_difficulty(metas):
+    lines = []
+    lines.append("## Index by Difficulty")
+    order = ["Easy", "Medium", "Hard"]
+    buckets = {k: [] for k in order}
+    for m in metas:
+        d = m.get("difficulty", "")
+        if d in buckets:
+            buckets[d].append(m)
+        else:
+            # unknown/None -> add to Medium as neutral bucket
+            buckets["Medium"].append(m)
+    for diff in order:
+        lines.append(f"### {diff} ({len(buckets[diff])})")
+        lines.extend(_markdown_table_header())
+        for m in sorted(buckets[diff], key=lambda x: int(x.get("id", 0))):
+            lines.append(_row_line(m))
+        lines.append("")
+    return lines
+
+def _build_index_by_topic(metas):
+    lines = []
+    lines.append("## Index by Topic (Data Structure)")
+    topic_map = {}
+    for m in metas:
+        for t in (m.get("tags") or []):
+            topic_map.setdefault(t, []).append(m)
+    for topic in sorted(topic_map.keys(), key=lambda s: s.lower()):
+        arr = topic_map[topic]
+        lines.append(f"### {topic} ({len(arr)})")
+        lines.extend(_markdown_table_header())
+        for m in sorted(arr, key=lambda x: int(x.get("id", 0))):
+            lines.append(_row_line(m))
+        lines.append("")
+    return lines
+
+def cmd_readme(args=None):
+    # Ensure INDEX exists (for CSV users); but categories用的是 meta.json，更丰富
+    if not INDEX_CSV.exists():
+        cmd_index(None)
+
+    metas = _load_all_meta_from_disk()
+
+    lines = []
+    lines.extend(_build_overview_section(metas))
+    lines.extend(_build_index_by_difficulty(metas))
+    lines.extend(_build_index_by_topic(metas))
 
     write_file(README_MD, "\n".join(lines))
-    print(f"[ok] README.md updated")
+    print(f"[ok] README.md updated with categorized indices")
 
 def cmd_remove(args):
     target_dir = None
@@ -465,7 +508,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_idx = sub.add_parser("index", help="rebuild INDEX.csv")
     p_idx.set_defaults(func=cmd_index)
 
-    p_md = sub.add_parser("readme", help="rebuild README.md")
+    p_md = sub.add_parser("readme", help="rebuild README.md (with categorized indices)")
     p_md.set_defaults(func=cmd_readme)
 
     return p
