@@ -5,31 +5,39 @@
 #include <climits>
 using namespace std;
 
-// 手写项结构体
+// 数组项
 struct Term {
     long long c;
     int e;
 };
 
+// 链表节点
 struct Node {
-    long long c;  // 系数
-    int e;        // 指数
+    long long c;  
+    int e;  
     Node* next;
     Node(long long c_, int e_, Node* nx=nullptr): c(c_), e(e_), next(nx) {}
 };
 
 class Poly {
 public:
+    // 创建空多项式
     Poly() { head = new Node(0, INT_MAX); }
+    // 拷贝构造
     Poly(const Poly& other) { head = new Node(0, INT_MAX); copyFrom(other); }
+    // 拷贝赋值
     Poly& operator=(const Poly& other){ if(this!=&other){clear(); copyFrom(other);} return *this; }
+    // 移动构造
     Poly(Poly&& other) noexcept { head = other.head; other.head = new Node(0, INT_MAX); }
+    // 移动赋值
     Poly& operator=(Poly&& other) noexcept {
         if (this != &other) { destroy(); head = other.head; other.head = new Node(0, INT_MAX); }
         return *this;
     }
+    // 析构
     ~Poly(){ destroy(); }
 
+    // 按降幂排列插入项
     void insertTerm(long long c, int e) {
         if (c == 0) return;
         Node* prev = head; Node* cur = head->next;
@@ -41,11 +49,13 @@ public:
             prev->next = new Node(c, e, cur);
         }
     }
-    // 用手写数组构建
+    
+    // 用手写数组构建链表
     void buildFromTerms(const Term* terms, int n){
         for (int i = 0; i < n; ++i) insertTerm(terms[i].c, terms[i].e);
     }
 
+    // 多项式运算
     Poly add(const Poly& B) const {
         Poly R; Node *p=head->next, *q=B.head->next, *r=R.head;
         while (p||q){
@@ -73,6 +83,8 @@ public:
         }
         return R;
     }
+
+    // 求导
     Poly derivative() const {
         Poly R;
         for (Node* p = head->next; p; p = p->next) {
@@ -83,6 +95,7 @@ public:
         return R;
     }
 
+    // 求值
     double eval(double x) const {
         double s = 0.0;
         for (Node* p=head->next; p; p=p->next) {
@@ -91,6 +104,7 @@ public:
         return s;
     }
 
+    // 代数式输出
     string toAlgebra() const {
         Node* p = head->next;
         if (!p) return "0";
@@ -109,6 +123,7 @@ public:
             if (e == 0) {
                 ss << absc;
             } else if (e == 1) {
+                // 系数为1不输出
                 if (absc != 1) ss << absc;
                 ss << "x";
             } else {
@@ -121,6 +136,7 @@ public:
         return ss.str();
     }
 
+    // 系数 指数对输出
     void printPairs(ostream& os=cout) const {
         Node* p=head->next; if(!p){ os<<"0 0\n"; return; }
         bool first=true;
