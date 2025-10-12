@@ -37,7 +37,7 @@ public:
     // 析构
     ~Poly(){ destroy(); }
 
-    // 按降幂排列插入项
+    // 按降幂排列插入项，可重复
     void insertTerm(long long c, int e) {
         if (c == 0) return;
         Node* prev = head; Node* cur = head->next;
@@ -59,18 +59,42 @@ public:
     Poly add(const Poly& B) const {
         Poly R; Node *p=head->next, *q=B.head->next, *r=R.head;
         while (p||q){
-            if (q==nullptr || (p&&p->e>q->e)) { r->next=new Node(p->c,p->e); r=r->next; p=p->next; }
-            else if (p==nullptr || (q&&q->e>p->e)) { r->next=new Node(q->c,q->e); r=r->next; q=q->next; }
-            else { long long c=p->c+q->c; if(c) { r->next=new Node(c,p->e); r=r->next; } p=p->next; q=q->next; }
+            if (q==nullptr || (p&&p->e>q->e)) { 
+                r->next=new Node(p->c,p->e); 
+                r=r->next; p=p->next; 
+            }
+            else if (p==nullptr || (q&&q->e>p->e)) { 
+                r->next=new Node(q->c,q->e); 
+                r=r->next; q=q->next; 
+            }
+            else { 
+                long long c=p->c+q->c; 
+                if(c) { 
+                    r->next=new Node(c,p->e); 
+                    r=r->next; 
+                } 
+                p=p->next; q=q->next; 
+            }
         }
         return R;
     }
     Poly sub(const Poly& B) const {
         Poly R; Node *p=head->next, *q=B.head->next, *r=R.head;
         while (p||q){
-            if (q==nullptr || (p&&p->e>q->e)) { r->next=new Node(p->c,p->e); r=r->next; p=p->next; }
-            else if (p==nullptr || (q&&q->e>p->e)) { r->next=new Node(-q->c,q->e); r=r->next; q=q->next; }
-            else { long long c=p->c-q->c; if(c){ r->next=new Node(c,p->e); r=r->next; } p=p->next; q=q->next; }
+            if (q==nullptr || (p&&p->e>q->e)) { 
+                r->next=new Node(p->c,p->e); 
+                r=r->next; p=p->next; 
+            }
+            else if (p==nullptr || (q&&q->e>p->e)) { 
+                r->next=new Node(-q->c,q->e); 
+                r=r->next; q=q->next; 
+            }
+            else { 
+                long long c=p->c-q->c; 
+                if(c){ 
+                    r->next=new Node(c,p->e); r=r->next; 
+                } p=p->next; q=q->next; 
+            }
         }
         return R;
     }
