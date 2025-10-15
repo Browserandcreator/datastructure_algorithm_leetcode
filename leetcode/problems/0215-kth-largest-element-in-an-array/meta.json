@@ -1,0 +1,20 @@
+{
+  "id": 215,
+  "title": "Kth Largest Element in an Array",
+  "slug": "kth-largest-element-in-an-array",
+  "difficulty": "Medium",
+  "tags": [
+    "Array",
+    "Divide and Conquer",
+    "Quickselect",
+    "Sorting",
+    "Heap (Priority Queue)"
+  ],
+  "link": "https://leetcode.cn/problems/kth-largest-element-in-an-array",
+  "desc_text": "给定整数数组 nums 和整数 k，请返回数组中第 k 个最大的元素。\n\n请注意，你需要找的是数组排序后的第 k 个最大的元素，而不是第 k 个不同的元素。\n\n你必须设计并实现时间复杂度为 O(n) 的算法解决此问题。\n\n&nbsp;\n\n示例 1:\n\n\n输入: [3,2,1,5,6,4], k = 2\n输出: 5\n\n\n示例&nbsp;2:\n\n\n输入: [3,2,3,1,2,4,5,5,6], k = 4\n输出: 4\n\n&nbsp;\n\n提示： \n\n\n\t1 &lt;= k &lt;= nums.length &lt;= 105\n\t-104&nbsp;&lt;= nums[i] &lt;= 104",
+  "skeletons": {
+    "cpp": "class Solution {\npublic:\n    int findKthLargest(vector<int>& nums, int k) {\n        \n    }\n};",
+    "python": "class Solution(object):\n    def findKthLargest(self, nums, k):\n        \"\"\"\n        :type nums: List[int]\n        :type k: int\n        :rtype: int\n        \"\"\"\n        "
+  },
+  "site": "cn"
+}
