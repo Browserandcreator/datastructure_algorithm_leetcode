@@ -15,6 +15,11 @@ static constexpr int IDLE_BELL = 300;    // 原地 >=300t 回一层
 static constexpr int SIM_MIN_T = 500;
 static constexpr int SIM_MAX_T = 3000;
 
+// ---- 参数 ----
+const int MAX_OPEN_TICKS = 120;   // 门最长保持时间（tick）
+
+
+
 /*** 随机 ***/
 struct RNG {
     mt19937_64 eng;
@@ -47,6 +52,16 @@ struct Calls {
     bool anyBelow(int f) const {
         for(int i=1;i<f;i++) if(up[i]||dn[i]||car[i]) return true;
         return false;
+    }
+    // 最近的上方任务楼层（无则返回 -1）
+    int nearestAbove(int f) const {
+        for(int i=f+1;i<=FLOORS;i++) if(up[i]||dn[i]||car[i]) return i;
+        return -1;
+    }
+    // 最近的下方任务楼层（无则返回 -1）
+    int nearestBelow(int f) const {
+        for(int i=f-1;i>=1;i--) if(up[i]||dn[i]||car[i]) return i;
+        return -1;
     }
 };
 
@@ -142,57 +157,74 @@ struct World {
     // —— 关键的“最小修复”：大厅保底策略
     // 若 F1 上行队列有人，且没有电梯正在去 F1，则派最近的idle电梯去 F1。
     void ensureLobbyFeeder(int tick){
-        if(Qup[LOBBY].empty()) return;      // 一层没人等上行就不干预
-        // 是否已经有人正去 F1（向下行、或正在 F1 开门）
-        for(auto &e: elev){
-            if((e.floor==LOBBY && (e.doorOpen || e.doorTimer>0)) ||
-               (e.dir==DOWN && e.floor>LOBBY)) return;  // 有人在服务/在路上
+        if (Qup[LOBBY].empty()) return;  // 一层没人等上行就不干预
+
+        // 是否已有电梯在服务 F1（开门、在路上、或朝下）
+        for (auto &e: elev) {
+            if ((e.floor == LOBBY && (e.doorOpen || e.doorTimer > 0)) ||
+                (e.dir == DOWN && e.floor > LOBBY && e.moveTimer > 0))
+                return;  // 有电梯正在/即将服务
         }
-        // 选择最近的“空闲”电梯
-        int best=-1,bestDist=1e9;
-        for(int i=0;i<E;i++){
-            auto &e=elev[i];
-            if(e.moveTimer==0 && !e.doorOpen && e.doorTimer==0){
-                int d=abs(e.floor-LOBBY);
-                if(d<bestDist){ bestDist=d; best=i; }
+
+        // 选择最近空闲电梯
+        int best = -1, bestDist = 1e9;
+        for (int i = 0; i < E; i++) {
+            auto &e = elev[i];
+            if (e.moveTimer == 0 && !e.doorOpen && e.doorTimer == 0 && e.dir == IDLE) {
+                if (e.floor == FLOORS) continue; // 不派顶层电梯
+                int d = abs(e.floor - LOBBY);
+                if (d < bestDist) { bestDist = d; best = i; }
             }
         }
-        if(best!=-1){
-            auto &e=elev[best];
-            e.dir = (e.floor>LOBBY? DOWN: UP);
+        if (best != -1) {
+            auto &e = elev[best];
+            e.dir = (e.floor > LOBBY ? DOWN : UP);
             startMoveOneFloor(e, tick);
-            pushLog(fmt("T%05d: E#%d assign-to-lobby", tick, e.id));
+            if (e.moveTimer > 0)
+                pushLog(fmt("T%05d: E#%d assign-to-lobby", tick, e.id));
         }
     }
 
     // 控制器：更新状态，准备移动
-    void controllerChoose(Elevator& e, int tick){
-        if(e.moveTimer>0 || e.doorTimer>0) return;
-        // 当前层有下客
-        if(!e.doorOpen && e.call.car[e.floor]){ openDoor(e,tick); return; }
-        // 当前层有与方向一致的外呼
-        if(e.dir==UP   && e.call.up[e.floor])   { openDoor(e,tick); return; }
-        if(e.dir==DOWN && e.call.dn[e.floor])   { openDoor(e,tick); return; }
+    void controllerChoose(Elevator &e, int tick) {
+        if (e.moveTimer > 0 || e.doorOpen || e.doorTimer > 0) return;
 
-        bool anyAbove=e.call.anyAbove(e.floor), anyBelow=e.call.anyBelow(e.floor);
-        // 超时回一楼
-        if(e.dir==IDLE){
-            if(anyAbove||anyBelow){
-                int upDist=1e9,dnDist=1e9;
-                for(int i=e.floor+1;i<=FLOORS;i++) if(e.call.up[i]||e.call.dn[i]||e.call.car[i]){upDist=i-e.floor;break;}
-                for(int i=e.floor-1;i>=1;i--) if(e.call.up[i]||e.call.dn[i]||e.call.car[i]){dnDist=e.floor-i;break;}
-                e.dir=(upDist<=dnDist?UP:DOWN);
-            }else{
+        // 边界换向保护
+        if (e.floor == FLOORS && e.dir == UP) e.dir = DOWN;
+        if (e.floor == 1 && e.dir == DOWN) e.dir = UP;
+
+        if (e.call.car[e.floor] ||
+            (e.dir != DOWN && e.call.up[e.floor]) ||
+            (e.dir != UP && e.call.dn[e.floor])) {
+            openDoor(e, tick);
+            return;
+        }
+
+        bool above = e.call.anyAbove(e.floor);
+        bool below = e.call.anyBelow(e.floor);
+
+        if (e.dir == IDLE) {
+            if (above && !below) e.dir = UP;
+            else if (below && !above) e.dir = DOWN;
+            else if (above && below) {
+                int na = e.call.nearestAbove(e.floor);
+                int nb = e.call.nearestBelow(e.floor);
+                if (na != -1 && nb != -1)
+                    e.dir = (abs(e.floor - na) < abs(e.floor - nb) ? UP : DOWN);
+                else if (na != -1) e.dir = UP;
+                else if (nb != -1) e.dir = DOWN;
+            } else {
                 e.idleStay++;
-                if(e.idleStay>=IDLE_BELL && e.floor!=LOBBY){
-                    e.dir=(e.floor>LOBBY?DOWN:UP);
-                    startMoveOneFloor(e,tick);
-                    pushLog(fmt("T%05d: E#%d idle>300t, recall to lobby",tick,e.id,e.floor));
+                if (e.idleStay >= IDLE_BELL && e.floor != LOBBY) {
+                    e.dir = (e.floor > LOBBY ? DOWN : UP);
+                    startMoveOneFloor(e, tick);
+                    e.idleStay = 0;
+                    pushLog(fmt("T%05d: E#%d recall to lobby", tick, e.id));
                 }
                 return;
             }
         }
-        if(!e.doorOpen) startMoveOneFloor(e,tick);
+        startMoveOneFloor(e, tick);
     }
 
     void startMoveOneFloor(Elevator& e, int tick){
@@ -245,42 +277,60 @@ struct World {
         }
     }
 
-    // 门开期间：先下客，再同向上客
-    void handleDoorWork(Elevator& e, int tick){
-        if(!e.doorOpen) return;
-        if(e.doorTimer>0){ e.doorTimer--; return; } // 开门动画/累积的上下客时间
+    // 门开期间：先下客，再同向上客（增加超时关闭与上客限制）
+    void handleDoorWork(Elevator &e, int tick) {
+        static unordered_map<int,int> openTime;  // 每个电梯的门开时间累计
+        if (!e.doorOpen) return;
 
-        int dropCnt=0;
-        if(e.call.car[e.floor]){
+        openTime[e.id]++;
+
+        // 超时自动关门
+        if (openTime[e.id] > MAX_OPEN_TICKS) {
+            pushLog(fmt("T%05d: E#%d timeout-close at F%d", tick, e.id, e.floor));
+            closeDoor(e, tick);
+            openTime[e.id] = 0;
+            return;
+        }
+
+        if (e.doorTimer > 0) { e.doorTimer--; return; }
+
+        int dropCnt = 0;
+        if (e.call.car[e.floor]) {
             vector<Passenger> keep;
-            for(auto &p: e.inside){
-                if(p.outFloor==e.floor){
-                    dropCnt++; e.doorTimer+=PERSON_IO;
-                    pushLog(fmt("T%05d: E#%d F%d  P#%d OUT (+%dt)",tick,e.id,e.floor,p.id,PERSON_IO));
-                }else keep.push_back(p);
+            for (auto &p : e.inside) {
+                if (p.outFloor == e.floor) {
+                    dropCnt++;
+                    e.doorTimer += PERSON_IO;
+                    pushLog(fmt("T%05d: E#%d F%d  P#%d OUT (+%dt)",
+                                tick, e.id, e.floor, p.id, PERSON_IO));
+                } else keep.push_back(p);
             }
             e.inside.swap(keep);
-            e.call.car[e.floor]=0;
-            if(dropCnt>0) return; // 先把“下客时间”走完
+            e.call.car[e.floor] = 0;
+            if (dropCnt > 0) return;
         }
 
-        // 同向上客
-        deque<Passenger> &Q = (e.dir!=DOWN? Qup[e.floor] : Qdn[e.floor]);
-        int take=0;
-        while(!Q.empty()){
+        deque<Passenger> &Q = (e.dir != DOWN ? Qup[e.floor] : Qdn[e.floor]);
+        int take = 0;
+        while (!Q.empty() && take < 4) { // 每次最多上4人
             Passenger p = Q.front(); Q.pop_front();
             e.inside.push_back(p);
-            e.call.car[p.outFloor]=1;
+            e.call.car[p.outFloor] = 1;
             e.doorTimer += PERSON_IO;
             take++;
-            pushLog(fmt("T%05d: E#%d F%d  P#%d IN ->F%d (+%dt)",tick,e.id,e.floor,p.id,p.outFloor,PERSON_IO));
+            pushLog(fmt("T%05d: E#%d F%d  P#%d IN ->F%d (+%dt)",
+                        tick, e.id, e.floor, p.id, p.outFloor, PERSON_IO));
         }
-        // 若该方向队列清空则熄灭该方向外呼状态
-        if(e.dir!=DOWN){ for(auto &el: elev) el.call.up[e.floor]=Qup[e.floor].empty()?0:1; }
-        else           { for(auto &el: elev) el.call.dn[e.floor]=Qdn[e.floor].empty()?0:1; }
 
-        // 无人上下，关门
-        if(dropCnt==0 && take==0) closeDoor(e,tick);
+        if (Q.empty()) {
+            if (e.dir != DOWN) for (auto &el : elev) el.call.up[e.floor] = 0;
+            else for (auto &el : elev) el.call.dn[e.floor] = 0;
+        }
+
+        if (dropCnt == 0 && take == 0) {
+            closeDoor(e, tick);
+            openTime[e.id] = 0;
+        }
     }
 
     // 推进一台电梯
