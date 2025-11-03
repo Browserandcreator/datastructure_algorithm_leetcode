@@ -1,7 +1,7 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-/*** 十字链表结点 ***/
+/** 十字链表结点 **/
 struct OLNode {
     int r, c;          // 行、列（1-based）
     long long v;       // 值
@@ -11,7 +11,7 @@ struct OLNode {
         : r(r_), c(c_), v(v_), right(nullptr), down(nullptr) {}
 };
 
-/*** 稀疏矩阵：十字链表表示 ***/
+/** 稀疏矩阵：十字链表表示 **/
 class CrossSparseMatrix {
 public:
     int rows, cols;
@@ -141,7 +141,7 @@ public:
     }
 };
 
-/*** 示例主程序
+/** 示例主程序
 输入格式（可自行改动）：
 R C
 nnzA
@@ -151,11 +151,8 @@ r c v   (共 nnzB 行)
 输出：
 A+B
 A-B
-***/
+**/
 int main(){
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
-
     int R, C;
     if(!(cin >> R >> C)) return 0;
 
